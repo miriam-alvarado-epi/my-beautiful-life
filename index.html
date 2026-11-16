@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>My Beautiful Life</title>
+    <style>
+      table { border-collapse: collapse; }
+      td { padding: 6px 10px; text-align: center; }
+      td:first-child {
+        text-align: left;
+        position: sticky;
+        left: 0;
+        background: white;
+      }
+      tr:first-child { font-weight: bold; }
+      .remove { border: none; background: none; color: gray; cursor: pointer; }
+      textarea { width: 100%; box-sizing: border-box; }
+    </style>
+  </head>
+  <body>
+    <h1>My Beautiful Life</h1>
+    <p id="intro">Things I want to prioritize</p>
+
+    <div style="overflow-x: auto;">
+      <table id="grid"></table>
+    </div>
+
+    <form id="addForm">
+      <input type="text" id="newName" placeholder="New priority">
+      <button type="submit">Add</button>
+    </form>
+
+    <div id="monthEnd" hidden>
+      <h2>Reflection</h2>
+      <textarea id="reflection" rows="6" placeholder="How did the month go?"></textarea>
+
+      <h2>Carry over to the new month</h2>
+      <div id="carryList"></div>
+
+      <p><button id="startMonth">Start new month</button></p>
+    </div>
+
+    <script>
+      // The date the page treats as "now".
+      const now = new Date();
+	  // const now = new Date(2026, 11, 1);
+
+      // Turns a date into text like "2026-11-16"
+      function dateText(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return year + '-' + month + '-' + day;
+      }
+
+      // Load the saved list. The very first time there is none,
+      // so start with these three.
+      let activities = JSON.parse(localStorage.getItem('activities'));
+	  if (activities === null) {
+		activities = [];
+	  }
+
+      function saveActivities() {
+        localStorage.setItem('activities', JSON.stringify(activities));
+      }
+
+      // Which month are we tracking? Text like "2026-11".
+      const thisMonth = dateText(now).slice(0, 7);
+      let savedMonth = localStorage.getItem('currentMonth');
+      if (savedMonth === null) {
+        savedMonth = thisMonth;
+        localStorage.setItem('currentMonth', savedMonth);
+      }
+
+      // If the tracked month is not the real month, it is time to look back.
+      const reviewing = savedMonth !== thisMonth;
+
+      // The days to show, latest first
+      function daysToShow() {
+        const parts = savedMonth.split('-');
+        const year = Number(parts[0]);
+        const monthIndex = Number(parts[1]) - 1;
+
+        let lastDay;
+        if (reviewing) {
+          // Looking back: show the whole month
+          lastDay = new Date(year, monthIndex + 1, 0).getDate();
+        } else {
+          // Normal: show up to today
+          lastDay = now.getDate();
+        }
+
+        const days = [];
+        for (let d = lastDay; d >= 1; d--) {
+          days.push(new Date(year, monthIndex, d));
+        }
+        return days;
+      }
+
+      // Builds the whole table from scratch
+      function drawGrid() {
+        const grid = document.getElementById('grid');
+        grid.innerHTML = '';
+
+        const days = daysToShow();
+
+        // Top row: an empty corner, then one cell per day
+        const headerRow = grid.insertRow();
+        headerRow.insertCell();
+        days.forEach(function (date) {
+          const weekday = date.toLocaleDateString(undefined, { weekday: 'short' });
+          headerRow.insertCell().innerHTML = weekday + '<br>' + date.getDate();
+        });
+
+        // One row per activity
+        activities.forEach(function (activity) {
+          const row = grid.insertRow();
+
+          const nameCell = row.insertCell();
+          nameCell.textContent = activity.name + ' ';
+
+          // The remove button, except while looking back
+          if (!reviewing) {
+            const removeButton = document.createElement('button');
+            removeButton.textContent = '×';
+            removeButton.className = 'remove';
+            removeButton.addEventListener('click', function () {
+              if (confirm('Remove "' + activity.name + '"?')) {
+                activities = activities.filter(function (a) {
+                  return a.id !== activity.id;
+                });
+                saveActivities();
+                drawGrid();
+              }
+            });
+            nameCell.appendChild(removeButton);
+          }
+
+          // One checkbox per day
+          days.forEach(function (date) {
+            const key = dateText(date) + '-' + activity.id;
+
+            const box = document.createElement('input');
+            box.type = 'checkbox';
+            box.checked = localStorage.getItem(key) === 'yes';
+            box.addEventListener('change', function () {
+              localStorage.setItem(key, box.checked ? 'yes' : 'no');
+            });
+
+            row.insertCell().appendChild(box);
+          });
+        });
+      }
+
+      // When the form is submitted, add the new priority
+      document.getElementById('addForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+
+        const input = document.getElementById('newName');
+        const name = input.value.trim();
+        if (name === '') {
+          return;
+        }
+
+        activities.push({ id: 'a' + Date.now(), name: name });
+        saveActivities();
+        drawGrid();
+        input.value = '';
+      });
+
+      // Sets up the look-back screen
+      function showMonthEnd() {
+        const monthName = daysToShow()[0].toLocaleDateString(undefined,
+          { month: 'long', year: 'numeric' });
+        document.getElementById('intro').textContent =
+          'Looking back at ' + monthName + '. Fill in any days you missed, then reflect below.';
+
+        document.getElementById('addForm').hidden = true;
+        document.getElementById('monthEnd').hidden = false;
+
+        // The reflection box: load anything already written, save while typing
+        const reflection = document.getElementById('reflection');
+        const reflectionKey = 'reflection-' + savedMonth;
+        reflection.value = localStorage.getItem(reflectionKey) || '';
+        reflection.addEventListener('input', function () {
+          localStorage.setItem(reflectionKey, reflection.value);
+        });
+
+        // One "carry over" tick per priority, ticked to begin with
+        const carryList = document.getElementById('carryList');
+        activities.forEach(function (activity) {
+          const label = document.createElement('label');
+          const box = document.createElement('input');
+          box.type = 'checkbox';
+          box.id = 'carry-' + activity.id;
+          box.checked = true;
+          label.appendChild(box);
+          label.appendChild(document.createTextNode(' ' + activity.name));
+          carryList.appendChild(label);
+          carryList.appendChild(document.createElement('br'));
+        });
+
+        // The button: keep a copy of last month's list, then start fresh
+        document.getElementById('startMonth').addEventListener('click', function () {
+          localStorage.setItem('activities-' + savedMonth, JSON.stringify(activities));
+
+          activities = activities.filter(function (activity) {
+            return document.getElementById('carry-' + activity.id).checked;
+          });
+          saveActivities();
+
+          localStorage.setItem('currentMonth', thisMonth);
+          location.reload();
+        });
+      }
+
+      // When the page first loads
+      drawGrid();
+      if (reviewing) {
+        showMonthEnd();
+      }
+    </script>
+  </body>
+</html>
