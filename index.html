@@ -244,7 +244,8 @@
     { type: 'text/plain' });
 
   // On phones, open the share sheet. Otherwise, download the file.
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+  const onPhone = /Android|iPhone|iPad/.test(navigator.userAgent);
+	if (onPhone && navigator.canShare && navigator.canShare({ files: [file] })) {
     navigator.share({ files: [file] }).catch(function () {});
   } else {
     const link = document.createElement('a');
