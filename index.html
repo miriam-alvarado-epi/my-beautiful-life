@@ -50,6 +50,13 @@
       <p><button id="startMonth">Start new month</button></p>
     </div>
 
+	<h2>Backup</h2>
+	<p>
+ 	 <button id="backupButton">Save backup</button>
+ 	 <button id="restoreButton">Restore from backup</button>
+ 	 <input type="file" id="restoreFile" hidden>
+	</p>
+	  
     <script>
       // The date the page treats as "now".
       const now = new Date();
@@ -224,6 +231,68 @@
         });
       }
 
+  // Save backup: collect everything in storage into one file
+	document.getElementById('backupButton').addEventListener('click', function () {
+	  const data = {};
+	  for (let i = 0; i < localStorage.length; i++) {
+ 	   const key = localStorage.key(i);
+  	  data[key] = localStorage.getItem(key);
+ 	 }
+
+  const fileName = 'tracker-backup-' + dateText(new Date()) + '.txt';
+  const file = new File([JSON.stringify(data, null, 2)], fileName,
+    { type: 'text/plain' });
+
+  // On phones, open the share sheet. Otherwise, download the file.
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    navigator.share({ files: [file] }).catch(function () {});
+  } else {
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(file);
+    link.download = fileName;
+    link.click();
+  }
+});
+
+// Restore: the visible button opens the hidden file chooser
+document.getElementById('restoreButton').addEventListener('click', function () {
+  document.getElementById('restoreFile').click();
+});
+
+// When a file has been chosen, read it and load it into storage
+document.getElementById('restoreFile').addEventListener('change', function (event) {
+  const file = event.target.files[0];
+  if (!file) {
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.addEventListener('load', function () {
+    let data;
+    try {
+      data = JSON.parse(reader.result);
+    } catch (error) {
+      data = null;
+    }
+
+    if (data === null || typeof data !== 'object') {
+      alert('That file is not a tracker backup.');
+      return;
+    }
+
+    if (!confirm('Replace everything on this device with the backup?')) {
+      return;
+    }
+
+    localStorage.clear();
+    Object.keys(data).forEach(function (key) {
+      localStorage.setItem(key, data[key]);
+    });
+    location.reload();
+  });
+  reader.readAsText(file);
+});
+		
       // When the page first loads
       drawGrid();
       if (reviewing) {
