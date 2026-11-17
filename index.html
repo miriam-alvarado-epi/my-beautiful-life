@@ -236,7 +236,9 @@
 	  const data = {};
 	  for (let i = 0; i < localStorage.length; i++) {
  	   const key = localStorage.key(i);
-  	  data[key] = localStorage.getItem(key);
+  	  if (!key.startsWith('sleep-')) {
+ 	 data[key] = localStorage.getItem(key);
+	}
  	 }
 
   const fileName = 'tracker-backup-' + dateText(new Date()) + '.txt';
@@ -285,7 +287,15 @@ document.getElementById('restoreFile').addEventListener('change', function (even
       return;
     }
 
-    localStorage.clear();
+    const old = [];
+	for (let i = 0; i < localStorage.length; i++) {
+	  if (!localStorage.key(i).startsWith('sleep-')) {
+	    old.push(localStorage.key(i));
+	  }
+}
+old.forEach(function (key) {
+  localStorage.removeItem(key);
+});
     Object.keys(data).forEach(function (key) {
       localStorage.setItem(key, data[key]);
     });
